@@ -40,11 +40,19 @@ By default, summaries are extractive. You can enable LLM-based abstractive summa
 
 ```bash
 pip install openai
-export OPENAI_API_KEY=""
+export OPENAI_API_KEY=...
 NEWS_SUMMARY_MODE=llm NEWS_LLM_MODEL=gpt-5 python3 news_agent.py --topic world
 ```
 
 If the SDK isn't installed or the API call fails, it falls back to extractive summaries.
+
+Verbose logging for LLM usage:
+
+```bash
+NEWS_SUMMARY_MODE=llm python3 news_agent.py --verbose
+```
+
+Verbose mode also prints the error message if the LLM call fails.
 
 ## Environment Variables
 

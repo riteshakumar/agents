@@ -234,10 +234,17 @@ def summarize(text: str, max_sentences: int = 2) -> str:
     return " ".join(chosen)
 
 
-def llm_summarize(text: str, max_sentences: int = 2, model: str = "gpt-5") -> str:
+def llm_summarize(
+    text: str,
+    max_sentences: int = 2,
+    model: str = "gpt-5",
+    verbose: bool = False,
+) -> str:
     try:
         from openai import OpenAI
     except Exception:
+        if verbose:
+            print("[warn] OpenAI SDK import failed; using extractive summary.")
         return ""
 
     prompt = (
@@ -251,8 +258,16 @@ def llm_summarize(text: str, max_sentences: int = 2, model: str = "gpt-5") -> st
             model=model,
             input=[{"role": "user", "content": prompt}],
         )
-        return (response.output_text or "").strip()
-    except Exception:
+        out = (response.output_text or "").strip()
+        if verbose:
+            if out:
+                print(f"[info] LLM summary used ({model}).")
+            else:
+                print(f"[warn] LLM returned empty summary; using extractive.")
+        return out
+    except Exception as e:
+        if verbose:
+            print(f"[warn] LLM call failed; using extractive summary. Error: {e}")
         return ""
 
 
@@ -264,7 +279,13 @@ def llm_available() -> bool:
         return False
 
 
-def build_digest(items: List[Item], max_items: int, summary_mode: str, llm_model: str) -> str:
+def build_digest(
+    items: List[Item],
+    max_items: int,
+    summary_mode: str,
+    llm_model: str,
+    verbose: bool,
+) -> str:
     lines = []
     today = dt.datetime.now().strftime("%Y-%m-%d")
     lines.append(f"# Daily News Digest ({today})")
@@ -274,7 +295,7 @@ def build_digest(items: List[Item], max_items: int, summary_mode: str, llm_model
         summary = ""
         if it.summary:
             if summary_mode == SUMMARY_MODE_LLM:
-                summary = llm_summarize(it.summary, max_sentences=2, model=llm_model)
+                summary = llm_summarize(it.summary, max_sentences=2, model=llm_model, verbose=verbose)
             if not summary:
                 summary = summarize(it.summary, max_sentences=2)
         published = it.published.astimezone().strftime("%Y-%m-%d %H:%M %Z") if it.published else ""
@@ -297,13 +318,23 @@ def get_sources(topic: str) -> Dict[str, str]:
     return SOURCES_BY_TOPIC.get(topic, DEFAULT_SOURCES)
 
 
-def run(hours: int, max_items: int, out_path: Optional[str], topic: str, summary_mode: str, llm_model: str) -> int:
+def run(
+    hours: int,
+    max_items: int,
+    out_path: Optional[str],
+    topic: str,
+    summary_mode: str,
+    llm_model: str,
+    verbose: bool,
+) -> int:
     # Plan
     sources = get_sources(topic)
 
     if summary_mode == SUMMARY_MODE_LLM and not llm_available():
         print("[warn] OpenAI SDK not available. Falling back to extractive summaries.")
         summary_mode = SUMMARY_MODE_EXTRACTIVE
+    elif summary_mode == SUMMARY_MODE_LLM and verbose:
+        print("[info] LLM mode enabled.")
 
     # Gather
     all_items: List[Item] = []
@@ -329,7 +360,7 @@ def run(hours: int, max_items: int, out_path: Optional[str], topic: str, summary
     ordered = [it for it, _ in scored]
 
     # Summarize + Publish
-    digest = build_digest(ordered, max_items, summary_mode, llm_model)
+    digest = build_digest(ordered, max_items, summary_mode, llm_model, verbose)
     if out_path:
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(digest)
@@ -354,13 +385,22 @@ def main(argv: List[str]) -> int:
     )
     parser.add_argument("--llm-model", type=str, default=os.environ.get("NEWS_LLM_MODEL", "gpt-5"))
     parser.add_argument("--list-topics", action="store_true", help="List available topics and exit")
+    parser.add_argument("--verbose", action="store_true", help="Verbose logging")
     args = parser.parse_args(argv[1:])
 
     if args.list_topics:
         print("Available topics:", ", ".join(sorted(SOURCES_BY_TOPIC.keys())))
         return 0
 
-    return run(args.hours, args.max_items, args.out or None, args.topic, args.summary_mode, args.llm_model)
+    return run(
+        args.hours,
+        args.max_items,
+        args.out or None,
+        args.topic,
+        args.summary_mode,
+        args.llm_model,
+        args.verbose,
+    )
 
 
 if __name__ == "__main__":
