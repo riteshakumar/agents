@@ -40,7 +40,7 @@ By default, summaries are extractive. You can enable LLM-based abstractive summa
 
 ```bash
 pip install openai
-export OPENAI_API_KEY=...
+export OPENAI_API_KEY=""
 NEWS_SUMMARY_MODE=llm NEWS_LLM_MODEL=gpt-5 python3 news_agent.py --topic world
 ```
 
@@ -68,7 +68,7 @@ A cron-ready script is included at `scripts/run_daily.sh`. It writes digests to 
 Example crontab entry (runs at 7:15 AM local time):
 
 ```bash
-15 7 * * * /Users/akshataraikar/Downloads/REPOS/agents/news_agent/scripts/run_daily.sh
+15 7 * * * /path/to/repo/agents/news_agent/scripts/run_daily.sh
 ```
 
 If you move the repo, update `BASE_DIR` inside `scripts/run_daily.sh`.
