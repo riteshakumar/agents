@@ -2,7 +2,7 @@
 # Cron-ready daily run script.
 set -eu
 
-BASE_DIR="/Users/akshataraikar/Downloads/REPOS/agents/news_agent"
+BASE_DIR="/Users/akshataraikar/Downloads/REPOS/agents/news"
 PYTHON_BIN="/usr/bin/python3"
 OUT_DIR="$BASE_DIR/digests"
 TOPIC="${NEWS_TOPIC:-world}"
@@ -14,7 +14,7 @@ DATE_STR="$(date +%F)"
 OUT_FILE="$OUT_DIR/${TOPIC}-${DATE_STR}.md"
 
 cd "$BASE_DIR"
-$PYTHON_BIN news_agent.py \
+$PYTHON_BIN agent.py \
   --topic "$TOPIC" \
   --summary-mode "$SUMMARY_MODE" \
   --llm-model "$LLM_MODEL" \

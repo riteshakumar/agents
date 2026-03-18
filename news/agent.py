@@ -15,17 +15,18 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import html
 import os
 import re
 import sys
-import time
-import urllib.request
-import urllib.error
-import xml.etree.ElementTree as ET
 from collections import Counter
-from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional, Tuple, Dict
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
+from agents._shared import rss  # noqa: E402
 
 # ---- Configuration ----
 
@@ -64,13 +65,7 @@ SUMMARY_MODE_LLM = "llm"
 
 # ---- Data ----
 
-@dataclass
-class Item:
-    source: str
-    title: str
-    link: str
-    summary: str
-    published: Optional[dt.datetime]
+Item = rss.RssItem
 
 # ---- Utilities ----
 
@@ -78,79 +73,8 @@ def now_utc() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-def parse_rss(feed_xml: str, source: str) -> List[Item]:
-    items: List[Item] = []
-    try:
-        root = ET.fromstring(feed_xml)
-    except ET.ParseError:
-        return items
-
-    # RSS 2.0 items
-    for channel in root.findall("./channel"):
-        for it in channel.findall("./item"):
-            title = text_or_empty(it.find("title"))
-            link = text_or_empty(it.find("link"))
-            desc = text_or_empty(it.find("description"))
-            pub = text_or_empty(it.find("pubDate"))
-            published = parse_date(pub)
-            items.append(Item(source, title, link, desc, published))
-
-    # Atom entries
-    for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
-        title = text_or_empty(entry.find("{http://www.w3.org/2005/Atom}title"))
-        link_el = entry.find("{http://www.w3.org/2005/Atom}link")
-        link = link_el.attrib.get("href", "") if link_el is not None else ""
-        summary = text_or_empty(entry.find("{http://www.w3.org/2005/Atom}summary"))
-        updated = text_or_empty(entry.find("{http://www.w3.org/2005/Atom}updated"))
-        published = parse_date(updated)
-        items.append(Item(source, title, link, summary, published))
-
-    return items
-
-
-def parse_date(s: str) -> Optional[dt.datetime]:
-    s = s.strip()
-    if not s:
-        return None
-    # RFC 2822
-    for fmt in (
-        "%a, %d %b %Y %H:%M:%S %z",
-        "%a, %d %b %Y %H:%M:%S %Z",
-        "%Y-%m-%dT%H:%M:%S%z",
-        "%Y-%m-%dT%H:%M:%SZ",
-    ):
-        try:
-            d = dt.datetime.strptime(s, fmt)
-            return d if d.tzinfo else d.replace(tzinfo=dt.timezone.utc)
-        except ValueError:
-            pass
-    return None
-
-
-def text_or_empty(el: Optional[ET.Element]) -> str:
-    if el is None or el.text is None:
-        return ""
-    return html.unescape(el.text.strip())
-
-
 def clean_text(s: str) -> str:
-    s = re.sub(r"<[^>]+>", " ", s)
-    s = html.unescape(s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
-def fetch(url: str, timeout: int = 20, retries: int = 2, backoff: float = 1.5) -> str:
-    last_err = None
-    for i in range(retries + 1):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.read().decode("utf-8", errors="replace")
-        except (urllib.error.URLError, urllib.error.HTTPError) as e:
-            last_err = e
-            time.sleep(backoff ** i)
-    raise RuntimeError(f"Failed to fetch {url}: {last_err}")
+    return rss.clean_text(s)
 
 
 def within_window(item: Item, hours: int) -> bool:
@@ -340,8 +264,8 @@ def run(
     all_items: List[Item] = []
     for name, url in sources.items():
         try:
-            xml = fetch(url)
-            items = parse_rss(xml, name)
+            xml = rss.fetch(url, user_agent=USER_AGENT)
+            items = rss.parse_rss(xml, name)
             all_items.extend(items)
         except Exception as e:
             print(f"[warn] {name}: {e}")
